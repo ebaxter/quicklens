@@ -165,7 +165,7 @@ def qe_cov_fill_helper_fullsky( qeXY, qeZA, ret, fX, fY, switch_ZA=False, conj_Z
     return ret
 
 class qest(object):
-    """ base class for a quadratic estiamtor q^{XY}(L),
+    """ base class for a quadratic estimator q^{XY}(L),
     which can be run on fields \bar{X} and \bar{Y} as
 
     q^{XY}(L) = 1/2 \int{d^2 l_X} \int{d^2 l_Y}
