@@ -521,7 +521,7 @@ class tebfft(pix):
                  'bfft' : hashlib.sha1(self.bfft.view(np.uint8)).hexdigest() }
 
     def get_ml( self, lbins, t=None, psimin=0., psimax=np.inf, psispin=1 ):
-        """" returns a Cl object containing average over rings of the FFT.
+        """ returns a Cl object containing average over rings of the FFT.
                  * lbins   = list of bin edges.
                  * t       = function t(l) which scales the FFT before averaging. defaults to unity.
                  * psimin, psimax, psispin = parameters used to set wedges for the averaging.
@@ -1068,7 +1068,7 @@ class cfft(pix):
         return spec.rcfft2cl( lbins, self, t=t )
 
     def get_ml( self, lbins, t=None, psimin=0., psimax=np.inf, psispin=1 ):
-        """" returns a Cl object containing average over rings of the FFT.
+        """ returns a Cl object containing average over rings of the FFT.
                  * lbins   = list of bin edges.
                  * t       = function t(l) which weights the FFT before averaging. defaults to unity.
                  * psimin, psimax, psispin = parameters used to set wedges for the averaging.
