@@ -69,7 +69,7 @@ class library():
         this consists of an array of tuples (qe, scaling) containing a qest.qest object
         as well as a scaling to apply (either an overall number, or a 1D array in the
         case of a scale-dependent contribution. the total estimator is then a sum over
-        tupoles of each estimator multiplied by its scaling.
+        tuples of each estimator multiplied by its scaling.
         """
         if False:
             pass
