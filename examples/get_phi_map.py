@@ -13,6 +13,11 @@ import pdb
 
 import quicklens as ql
 
+#To do:
+#-------
+#-Put in cluster phi
+
+
 # simulation parameters.
 nsims      = 25
 lmin       = 100
@@ -42,22 +47,27 @@ npad       = 1
 t          = lambda l: (l+0.5)**4/(2.*np.pi) # scaling to apply to cl_phiphi when plotting.
 lbins      = np.linspace(10, lmax, 20)       # multipole bins.
 
-# cosmology parameters.
+#Get lensed and unlensed C_l's
 cl_unl     = ql.spec.get_camb_scalcl(lmax=lmax)
 cl_len     = ql.spec.get_camb_lensedcl(lmax=lmax)
+#Put 1-D power spectrum into 2D plane
+#c_L_phiphi
 clpp       = ql.spec.cl2cfft(cl_unl.clpp, ql.maps.cfft(nx,dx)).get_ml(lbins, t=t)
 
 # make libraries for simulated skies.
-sky_lib    = ql.sims.cmb.library_flat_lensed(pix, cl_unl, "temp5/sky")
-obs_lib    = ql.sims.obs.library_white_noise(pix, bl, sky_lib, nlev_t=nlev_t, nlev_p=nlev_p, lib_dir="temp5/obs")
+sky_lib    = ql.sims.cmb.library_flat_lensed(pix, cl_unl, "temp7/sky")
+
+pdb.set_trace()
+
+obs_lib    = ql.sims.obs.library_white_noise(pix, bl, sky_lib, nlev_t=nlev_t, nlev_p=nlev_p, lib_dir="temp6/obs")
 
 # make libraries for inverse-variance filtered skies.
 cl         = ql.spec.clmat_teb( ql.util.dictobj( {'lmax' : lmax, 'cltt' : cl_len.cltt, 'clee' : cl_len.clee, 'clbb' : cl_len.clbb} ) )
 transf     = ql.spec.cl2tebfft(ql.util.dictobj( {'lmax' : lmax, 'cltt' : bl, 'clee' : bl, 'clbb' : bl} ), pix)
 ivf_lib    = ql.sims.ivf.library_l_mask( ql.sims.ivf.library_diag(obs_lib, cl=cl, transf=transf, nlev_t=nlev_t, nlev_p=nlev_p, mask=mask), lmin=lmin, lmax=lmax )
 
-qest_lib = ql.sims.qest.library(cl_unl, cl_len, ivf_lib, lib_dir="temp5/qest", npad=npad)
-qest_lib_kappa = ql.sims.qest.library_kappa(qest_lib, sky_lib)
+qest_lib = ql.sims.qest.library(cl_unl, cl_len, ivf_lib, lib_dir="temp6/qest", npad=npad)
+#qest_lib_kappa = ql.sims.qest.library_kappa(qest_lib, sky_lib)
 
 # --
 # run estimators, make plots.
@@ -74,6 +84,7 @@ qft = qest_lib.get_sim_qft(estimator, 0)
 qr = qest_lib.get_qr(estimator)
 phihat_tt = qft / qr
 phihat_tt.fft = np.nan_to_num(phihat_tt.fft)
+
 
 test1 = phihat_tt.get_rffts()[0].get_rmap().map
 #This is what code is doing: take inverse fft, take real part, take fft, take inverse fft

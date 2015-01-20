@@ -2,6 +2,8 @@
 # --
 # this module contains code for simulating lensed/unlensed flat-sky cmb maps.
 
+import pdb
+
 import os
 import numpy as np
 import pickle as pk
@@ -111,6 +113,8 @@ class library_flat_lensed():
 
     def get_sim_phi(self, idx):
         tfname = self.lib_dir + "/sim_" + ('%04d' % idx) + "_phi_fft.pk"
+        print "tfname = ", tfname
+        pdb.set_trace()
         if not os.path.exists(tfname):
             self.cache_sim(idx)
         return pk.load( open(tfname, 'r' ) ).get_rmap()
