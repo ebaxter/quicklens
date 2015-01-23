@@ -12,9 +12,50 @@ import matplotlib.pyplot as pl
 import pdb
 from quicklens import sims
 from quicklens import maps
+from astropy.cosmology import Planck13 as cosmo
+from astropy import units as u
+from astropy import constants as const
 
 import quicklens as ql
 
+def get_NFW_kappa(pix, M_200, c_200, z_L, z_S):
+    #Return a kappa map (as an rmap object) corresponding
+    #to an NFW cluster observed across an angular window
+    #specified by the pix object, pix
+    #From http://arxiv.org/pdf/astro-ph/9908213v1.pdf
+    rho_c_z = cosmo.critical_density(z_L)
+    delta_c = (200./3.)*(c_200**3.)/(np.log(1.+c_200)-c_200/(1.+c_200))
+    r_200 = (((M_200/(200.*4.*np.pi/3.))/rho_c_z)**(1./3.)).to('Mpc')
+    r_s = r_200/c_200
+
+    #Angular diameter distances
+    D_L = cosmo.comoving_distance(z_L)/(1.+z_L)
+    D_S = cosmo.comoving_distance(z_S)/(1.+z_S)
+    D_LS = (cosmo.comoving_distance(z_S) - cosmo.comoving_distance(z_L))/(1.+z_S)
+    Sigma_c = (((const.c.cgs**2.)/(4.*np.pi*const.G.cgs))*(D_S/(D_L*D_LS))).to('M_sun/Mpc2')
+
+    #Angle between pixel center and center of map
+    theta_x_list = np.array(range(pix.nx))*pix.dx-pix.dx*0.5*(pix.nx - 1.)
+    theta_x = np.tile(theta_x_list,(pix.nx,1))
+    theta_y = np.transpose(theta_x)
+    theta = np.sqrt(theta_x**2. + theta_y**2.)
+    R = D_L*theta
+    x = R/r_s
+
+    g_theta = np.zeros(x.shape)
+    gt_one = np.where(x > 1.0)
+    lt_one = np.where(x < 1.0)
+    eq_one = np.where(x == 1.0)
+    g_theta[gt_one] = (1./(x[gt_one]**2. - 1))*(1. - (2./np.sqrt(x[gt_one]**2. - 1.))*np.arctan(np.sqrt((x[gt_one]-1.)/(x[gt_one]+1.))).value)
+    g_theta[lt_one] = (1./(x[lt_one]**2. - 1))*(1. - (2./np.sqrt(1. - x[lt_one]**2.))*np.arctanh(np.sqrt((1. - x[lt_one])/(x[lt_one]+1.))).value)
+    g_theta[eq_one] = 1./3.
+
+    Sigma = ((2.*r_s*delta_c*rho_c_z)*g_theta).to('M_sun/Mpc2')
+
+    kappa = Sigma/Sigma_c
+    kappa_rmap = ql.maps.rmap(pix.nx, pix.dx, map = kappa)
+    return kappa_rmap
+    
 def init_q(k):
     qes        = {} # estimators
     if k == 'ptt':
@@ -92,12 +133,11 @@ def get_qr(ivfs1, ivfs2, estimator, npad, ks=None):
             qrs[(ke,ks)] = ret
             return qrs[(ke,ks)]
 
-
 def get_quad(ivfs1, ivfs2, estimator,npad):
     #index of sim???
     #777777 change this
     i = 0
-    
+
     tft1, eft1, bft1 = ivfs1.get_sim_teb(i).get_cffts()
     if ivfs2 is not ivfs1:
         tft2, eft2, bft2 = ivfs2.get_sim_teb(i).get_cffts()
@@ -125,6 +165,7 @@ def get_quad(ivfs1, ivfs2, estimator,npad):
     my_qft = ret
     return my_qft
 
+
 # simulation parameters.
 nsims      = 25
 lmin       = 100
@@ -137,6 +178,31 @@ nlev_p     = 5.0  # polarization noise level, in uK.arcmin.
 bl         = ql.spec.bl(1., lmax) # beam transfer function.
 
 pix        = ql.maps.pix(nx,dx)
+
+
+M_200 = (1.e17)*u.M_sun
+c_200 = 3.0
+z_L = 1.0
+z_S = 1089. #IS THERE SOME BETTER WAY TO GET THIS?  FROM ASTROPY?
+cluster_kappa = get_NFW_kappa(pix, M_200, c_200, z_L, z_S)
+#check this! why 10000????? should this be lmax?
+#divide by 0?????? because of arange
+#Is this the right way to do this?
+#77777 something weird going on here, phi is very very large.
+#related to value at l = 0?
+temp = np.arange(0., 10000.)
+temp[0]= 1.0e-100
+cluster_phi_fft = cluster_kappa.get_rfft()*( 1./(0.5 * temp**2 ))
+#cluster_phi_fft.fft = np.nan_to_num(cluster_phi_fft.fft)
+#this is slightly weird 7777777
+#why isn't this exactly equal to input kappa?
+#Mean issue?
+#Apodize?
+fl = 1.0
+test_kappa = ( cluster_phi_fft  * ( 0.5 * np.arange(0,10000)**2 ) * fl ).get_rmap()
+test_phi = cluster_phi_fft.get_rmap()
+#ratio = cluster_kappa.map/(test_kappa.map + np.mean(cluster_kappa.map))
+#pdb.set_trace()
 
 mask       = np.ones( (nx, nx) )
 # mask to apply when inverse-variance filtering.
@@ -159,24 +225,24 @@ lbins      = np.linspace(10, lmax, 20)       # multipole bins.
 #Get lensed and unlensed C_l's
 cl_unl     = ql.spec.get_camb_scalcl(lmax=lmax)
 cl_len     = ql.spec.get_camb_lensedcl(lmax=lmax)
-#Put 1-D power spectrum into 2D plane
-#c_L_phiphi
-clpp       = ql.spec.cl2cfft(cl_unl.clpp, ql.maps.cfft(nx,dx)).get_ml(lbins, t=t)
+
+#Attempting to generate my own lensed maps
+#teb_unl = sims.tebfft( pix, cl_unl )
+#can change this to be whatever we want
+#phi_fft = sims.rfft( pix, cl_unl.clpp )
+#tqu_unl = teb_unl.get_tqu()
+#tqu_len = ql.lens.make_lensed_map_flat_sky( tqu_unl, phi_fft )
+#Choose whatever phi you want
+#new_phi_fft = phi_fft
+#new_phi_fft.fft[120:140,60:70] = 0.1
+#new_phi_fft = cluster_phi_fft
 
 # make libraries for simulated skies.
 #can we do this with not-flat sky?
-sky_lib    = ql.sims.cmb.library_flat_lensed(pix, cl_unl, "temp6/sky")
+sky_lib    = ql.sims.cmb.library_flat_lensed_fixphi(pix, cl_unl, cluster_phi_fft, "temp5/sky")
+obs_lib    = ql.sims.obs.library_white_noise(pix, bl, sky_lib, nlev_t=nlev_t, nlev_p=nlev_p, lib_dir="temp5/obs")
 
-teb_unl = sims.tebfft( pix, cl_unl )
-#can change this to be whatever we want
-phi_fft = sims.rfft( pix, cl_unl.clpp )
-
-tqu_unl = teb_unl.get_tqu()
-tqu_len = ql.lens.make_lensed_map_flat_sky( tqu_unl, phi_fft )
-
-obs_lib    = ql.sims.obs.library_white_noise(pix, bl, sky_lib, nlev_t=nlev_t, nlev_p=nlev_p, lib_dir="temp6/obs")
-
-#GET RID OF THIS LIBRARY SHIITE
+kappa = sky_lib.get_sim_kappa(0)
 
 # make libraries for inverse-variance filtered skies.
 cl         = ql.spec.clmat_teb( ql.util.dictobj( {'lmax' : lmax, 'cltt' : cl_len.cltt, 'clee' : cl_len.clee, 'clbb' : cl_len.clbb} ) )
@@ -209,7 +275,7 @@ kappa_true = sky_lib.get_sim_kappa(0)
 #7777NEED TO DO MEAN FIELD SUBTRACTION TOO!!!!!
 
 #Use library function to get quadratic estimators
-qest_lib = ql.sims.qest.library(cl_unl, cl_len, ivf_lib, lib_dir="temp6/qest", npad=npad)
+qest_lib = ql.sims.qest.library(cl_unl, cl_len, ivf_lib, lib_dir="temp5/qest", npad=npad)
 
 estimator = 'ptt'
 qft = qest_lib.get_sim_qft(estimator, 0)
